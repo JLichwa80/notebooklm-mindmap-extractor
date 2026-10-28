@@ -40,7 +40,7 @@ Linux:
 google-chrome --remote-debugging-port=9222 --user-data-dir="$HOME/.notebooklm-mindmap-chrome"
 ```
 
-Chrome requires a separate `--user-data-dir` for the debugging port, so this opens a fresh profile. Do this once: sign in to Google in that window. Keep the port local and do not share it.
+Chrome only allows the debugging port with a separate `--user-data-dir`, so the tool uses its own folder. The first launch creates it. Sign in to Google once in that window. Your sign-in and settings are kept in that folder, so every later run starts already signed in. Your normal Chrome profile is not touched. Keep the port local and do not share it.
 
 ## Step 2: Open your notebook and mindmap
 
