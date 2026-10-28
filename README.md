@@ -1,36 +1,31 @@
 # NotebookLM Mindmap Extractor
 
-Compile a NotebookLM mindmap and its generated responses into a hierarchical Markdown document using Playwright and Chrome DevTools Protocol (CDP).
+Turn a NotebookLM mindmap into a folder of Markdown files, one per node. For every node in your mindmap, the tool asks NotebookLM for its explanation, saves the answer, cleans it up, and organizes everything in the same hierarchy as the map. You can then combine the files into one document.
+
+It works with your own signed-in Chrome. It never sees your Google password and never signs in for you.
+
+## What you need
+
+- Python 3.10 or newer
+- Google Chrome
+- A NotebookLM notebook that already has a mindmap
 
 ## Install
-
-Requires Python 3.10 or newer, Playwright 1.64.1 or newer, and Chrome.
 
 ```bash
 pip install notebooklm-mindmap-extractor
 ```
 
-Or from a checkout:
+This installs the `notebooklm-mindmap-extractor` command.
 
-```bash
-python -m venv .venv
-# Windows PowerShell
-.\.venv\Scripts\Activate.ps1
-# macOS/Linux: source .venv/bin/activate
-python -m pip install -e ".[dev]"
-```
+## Step 1: Start Chrome with a debugging port
 
-For an existing wheel, use `python -m pip install dist/<wheel-filename>.whl`.
-The package installs the `notebooklm-mindmap-extractor` command. The module entry point is `python -m notebooklm_mindmap_extractor`.
+The tool controls a Chrome window that you start yourself. Close other windows of that Chrome profile first, then start Chrome like this.
 
-## Prepare Chrome
-
-Launch Chrome with a dedicated data directory and a local debugging port. Sign in to Google manually in that browser, open your notebook, and open the target mindmap. The extractor attaches to this session; it does not automate sign-in.
-
-Windows PowerShell (adjust the executable path if needed):
+Windows (PowerShell):
 
 ```powershell
-& 'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe' --remote-debugging-port=9222 --remote-debugging-address=127.0.0.1 --user-data-dir="$env:LOCALAPPDATA\NotebookLMMindmapChrome"
+& 'C:\Program Files\Google\Chrome\Application\chrome.exe' --remote-debugging-port=9222 --remote-debugging-address=127.0.0.1 --user-data-dir="$env:LOCALAPPDATA\NotebookLMMindmapChrome"
 ```
 
 macOS:
@@ -45,128 +40,135 @@ Linux:
 google-chrome --remote-debugging-port=9222 --user-data-dir="$HOME/.notebooklm-mindmap-chrome"
 ```
 
-Chrome 136 and newer require a non-default data directory for remote debugging. See [Chrome's remote debugging guidance](https://developer.chrome.com/blog/remote-debugging-port). Keep the endpoint local and exclude profiles and private exports from source control.
+Chrome requires a separate `--user-data-dir` for the debugging port, so this opens a fresh profile. Do this once: sign in to Google in that window. Keep the port local and do not share it.
 
-## Extract
+## Step 2: Open your notebook and mindmap
 
-With the target mindmap already open:
+In that Chrome window, open your notebook at notebooklm.google.com and wait for the page to load. The tool can open the mindmap for you by its title, so you do not have to open it yourself.
 
-```bash
-notebooklm-mindmap-extractor --output output/mindmap.md
-```
-
-Select a particular notebook and open a map by its exact visible title:
+## Step 3: Run the extractor
 
 ```bash
-notebooklm-mindmap-extractor --notebook "Token Buffet" --mindmap-title "Token MindMap" --max-nodes 1 --output output/token-smoke.md
+notebooklm-mindmap-extractor --notebook "My Notebook" --mindmap-title "My Mindmap"
 ```
 
-Both `notebook.google.com` and `notebooklm.google.com` notebook links, IDs, and titles are accepted.
+- `--notebook` is the notebook's name, ID, or URL.
+- `--mindmap-title` is the exact title of the mindmap as shown in NotebookLM.
 
-| Option | Default | Purpose |
-| --- | --- | --- |
-| `--cdp-url` | `http://localhost:9222` | Attach to a running Chrome session |
-| `--notebook` | (Required for extraction) | Select notebook by ID, title, or URL |
-| `--mindmap-title` | (Required for extraction) | Click the exact visible map title |
-| `--output` | `None` (compiled via `--build`) | UTF-8 Markdown destination |
-| `--folder-output` | `handbook` | Save docs in versioned node folder hierarchy |
-| `--extract-only` | `False` | Only capture raw text into `<run>/tmp`; clean later with `--clean` |
-| `--clean` | `None` | Offline: clean the saved raw `.txt` files of a run folder (or its `tmp` folder) into `.md` files |
-| `--build` | `None` | Recompile document from run folder offline (supports relative path) |
-| `--outline` | `doc_full_order.yml` in run dir | Custom order YAML for document compilation |
-| `--wait-timeout` | `120` | Maximum response wait in seconds per node |
-| `--max-nodes` | All discovered nodes | Limit generation for smoke testing |
-| `--dry-run` | `False` | Fast structure test without waiting for chat generations |
+The tool clicks each node in turn and waits for NotebookLM to answer, so a large map takes a while. Leave the Chrome window alone while it runs. Each node can take up to two minutes by default.
 
-## Two steps: capture, then clean
-
-Extraction runs in two steps so you never have to re-extract to adjust the output.
-
-1. **Capture** saves each node's text exactly as the page shows it, with no processing, to `<run>/tmp/`. The `.txt` files mirror the folder layout of the final `.md` files (`Overview.txt` for the root and for nodes with children, `<title>.txt` for leaves).
-2. **Clean** (`cleaner.py`) reads those files and writes the `.md` files next to `tmp/`. It removes citations, page icons and the follow-up prompt, turns tables into Markdown tables, fences box diagrams, and separates paragraphs.
-
-A normal run does both. To do them separately:
-
-```powershell
-# capture only
-notebooklm-mindmap-extractor --notebook "My Notebook" --mindmap-title "My Map" --extract-only
-
-# clean from the saved raw files, as often as needed, with no browser
-notebooklm-mindmap-extractor --clean handbook/my-notebook/my-map-20261028_152843
-```
-
-The page text carries no markup, so bold, bullets and heading markers are not available; headings and list items arrive as plain paragraphs. `--build` only combines the cleaned `.md` files into one document and does no cleaning.
-
-## Recompiling from Nodes and Customizing with doc_full_order.yml
-
-Extraction automatically saves a `doc_full_order.yml` file inside your versioned run directory under `--folder-output`. It establishes the parent and child hierarchy with explicit `order:` attributes:
-
-```yaml
-- nodeTitle: "Token Buffet AI Subscription Hub"
-  childNodes:
-    - title: "Core Architecture"
-      order: 1
-    - title: "Smart Routing & Tiers"
-      order: 2
-
-- nodeTitle: "Core Architecture"
-  childNodes:
-    - title: "Proxy Runtime: Standard HTTP server"
-      order: 1
-    - title: "Local Router: Port 8090"
-      order: 2
-```
-
-You can edit this file to change order numbers, reorder items, or omit sections.
-
-To recompile the unified document offline using a relative path, without launching Chrome or NotebookLM:
-
-```powershell
-python -m notebooklm_mindmap_extractor --build handbook/token-buffet-ai-subscription-hub-20261027_175222
-```
-
-Or using a custom outline file:
-
-```powershell
-python -m notebooklm_mindmap_extractor --build handbook/token-buffet-ai-subscription-hub-20261027_175222 --outline custom_order.yml --output output/custom_mindmap.md
-```
-
-Extraction clicks nodes and triggers NotebookLM generation. A missing or stale response causes a nonzero exit instead of a success placeholder. The output is written after all requested nodes complete.
-
-## Development and tests
+To try it on a small part first, limit the number of nodes:
 
 ```bash
-python -m pip install -e ".[dev]"
-python -m playwright install chromium
-python -m pytest
-python -m build
-python -m twine check dist/*
+notebooklm-mindmap-extractor --notebook "My Notebook" --mindmap-title "My Mindmap" --max-nodes 3
 ```
 
-Tests cover hierarchy reconstruction, the cleaner, and the capture-then-clean pipeline on a saved real extraction (`tests/fixtures/run/`). They do not contact Google or need a browser.
+## What you get
 
-`python -m build` creates a source archive and wheel in `dist/`. Packaging follows the [Python Packaging User Guide](https://packaging.python.org/en/latest/tutorials/packaging-projects/). The package is MIT licensed (see `LICENSE`). Releases are published to PyPI by `.github/workflows/publish.yml` when a GitHub Release is published, using Trusted Publishing.
-
-## Project layout
+Each run creates its own dated folder, so runs never overwrite each other:
 
 ```text
-pyproject.toml                       Package metadata, dependencies, console entry point
-src/notebooklm_mindmap_extractor/
-    __init__.py                     Public data model and hierarchy helper
-    __main__.py                     python -m entry point
-    cli.py                          Arguments and extraction orchestration
-    extractor.py                    Raw capture to tmp/, then the clean step per node
-    cleaner.py                      Cleaning of the raw page text
-    builder.py                      doc_full_order.yml and combining the .md files
-    hierarchy.py                    Parent-child reconstruction
-    models.py                       MindmapNode dataclass
-tests/                              Unit tests and a saved real extraction (fixtures/run)
+handbook/
+  my-notebook/
+    my-mindmap-20261028_152843/
+      Overview.md                  the root node
+      Chapter One/
+        Overview.md                a node that has children
+        Leaf Node.md               a node without children
+      doc_full_order.yml           the order used to combine the files
+      tmp/                         the raw text exactly as NotebookLM showed it
 ```
 
-The former root script is replaced by the installed console and module commands. `requirements.txt` remains an editable-install shortcut.
+The Markdown files have citations, page icons and the closing "Would you like to..." prompt removed. Tables become Markdown tables. The raw page text carries no formatting, so bold, bullets and heading markers are not available: headings and list items arrive as plain paragraphs.
 
-## Current limitations
+Use `--folder-output` to save somewhere other than `handbook`.
 
-The extractor supports mindmap trees rendered directly in the notebook or inside the embedded Studio App viewer. Wait for the viewer to finish loading before starting. Node clicks occur inside the map frame while generated answers are captured from the notebook chat panel. The command leaves the signed-in browser open and never reloads the notebook.
+## Combine everything into one document
 
-NotebookLM selectors may need updates when Google's UI changes. Only rendered nodes are discovered; collapsed branches are not automatically expanded. Complete accessibility levels use DOM preorder. Coordinate inference assumes a left-to-right map and uses the nearest parent vertically, so inspect the resulting hierarchy. Markdown headings are capped at six levels. A live test against a signed-in notebook is separate from the local fixture tests.
+To merge all the node files into a single Markdown document, with each node under a heading that matches its level in the map:
+
+```bash
+notebooklm-mindmap-extractor --build handbook/my-notebook/my-mindmap-20261028_152843 --output my-mindmap.md
+```
+
+This works offline, with no Chrome. To change the order or drop sections first, edit `doc_full_order.yml` in the run folder and change the `order:` numbers:
+
+```yaml
+- nodeTitle: "My Mindmap"
+  childNodes:
+    - title: "Chapter One"
+      order: 1
+    - title: "Chapter Two"
+      order: 2
+```
+
+You can also point to a different file with `--outline custom_order.yml`.
+
+## Capture now, clean later
+
+Extraction is the slow part, so you can do it once and clean the results as many times as you like.
+
+Capture only. This saves the raw text into the run's `tmp` folder and stops:
+
+```bash
+notebooklm-mindmap-extractor --notebook "My Notebook" --mindmap-title "My Mindmap" --extract-only
+```
+
+Clean from the saved raw files. This needs no Chrome and no internet:
+
+```bash
+notebooklm-mindmap-extractor --clean handbook/my-notebook/my-mindmap-20261028_152843
+```
+
+## All options
+
+| Option | Default | What it does |
+| --- | --- | --- |
+| `--notebook`, `-n` | none | Notebook name, ID, or URL (required for extraction) |
+| `--mindmap-title`, `-m` | none | Exact mindmap title (required for extraction) |
+| `--cdp-url` | `http://localhost:9222` | Where to find your Chrome debugging port |
+| `--folder-output`, `-f` | `handbook` | Folder for the dated run folders |
+| `--wait-timeout`, `-w` | `120` | Seconds to wait for each node's answer |
+| `--max-nodes` | all | Only capture this many nodes |
+| `--extract-only` | off | Save raw text only, skip cleaning |
+| `--clean FOLDER` | none | Clean the raw files of a saved run, offline |
+| `--build FOLDER` | none | Combine a run's Markdown files into one document, offline |
+| `--output`, `-o` | none | Path of the combined document |
+| `--outline FILE` | the run's `doc_full_order.yml` | Custom order file for `--build` |
+| `--dry-run` | off | Create the folder structure without waiting for answers |
+
+## Troubleshooting
+
+**"Chrome debugging is not running"**: Chrome was not started with `--remote-debugging-port=9222`, or it is on a different port. Close every window of that profile and start Chrome again with the command in Step 1, or pass `--cdp-url` with the right address.
+
+**"No matching NotebookLM tab"**: open the notebook in the Chrome window you started for the tool, and check that you are signed in.
+
+**"No rendered mindmap nodes found"**: wait for the mindmap to finish loading, then run again. Only nodes that are currently drawn are found, so expand branches you want included.
+
+**"Timed out waiting for a new response"**: NotebookLM was slow or did not answer. Run again with a larger `--wait-timeout`, for example `--wait-timeout 240`.
+
+**Your answers look different from before**: NotebookLM generates each answer fresh, so wording can change between runs. Use the dated folders to compare.
+
+## Limits
+
+- NotebookLM can change its page at any time, which may break the tool until it is updated.
+- Only nodes drawn on screen are discovered. Collapsed branches are not expanded for you.
+- Each node triggers a real NotebookLM request, so a large map uses a lot of your chat quota.
+- Use it on your own notebooks and respect Google's terms of service.
+
+## License
+
+MIT. See `LICENSE`.
+
+## For developers
+
+```bash
+git clone https://github.com/JLichwa80/notebooklm-mindmap-extractor
+cd notebooklm-mindmap-extractor
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1      # macOS/Linux: source .venv/bin/activate
+python -m pip install -e ".[dev]"
+python -m pytest
+```
+
+Capture saves the page text unprocessed (`extractor.py`). All cleaning lives in `cleaner.py`, and `builder.py` only combines the cleaned files. The tests run on a saved real extraction in `tests/fixtures/run/`, so they need no browser and do not contact Google. Releases are published to PyPI by `.github/workflows/publish.yml` when a GitHub Release is published.
