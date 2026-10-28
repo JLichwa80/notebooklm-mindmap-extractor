@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "notebooklm-mindmap-extractor"
+version = "0.1.0"
+description = "Compile NotebookLM mindmaps and generated responses into Markdown using Chrome CDP."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+    { name = "Jack Lichwa", email = "jacklichwa@gmail.com" },
+]
+keywords = ["notebooklm", "mindmap", "markdown", "playwright", "chrome-devtools-protocol"]
+dependencies = ["playwright>=1.64.1"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Operating System :: OS Independent",
+    "Topic :: Text Processing :: Markup :: Markdown",
+]
+
+[project.urls]
+Homepage = "https://github.com/JLichwa80/notebooklm-mindmap-extractor"
+Repository = "https://github.com/JLichwa80/notebooklm-mindmap-extractor"
+Issues = "https://github.com/JLichwa80/notebooklm-mindmap-extractor/issues"
+
+[project.optional-dependencies]
+dev = ["build>=1.2", "pytest>=8", "twine>=5"]
+
+[project.scripts]
+notebooklm-mindmap-extractor = "notebooklm_mindmap_extractor.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["browser: local Chromium integration tests (requires playwright install chromium)"]

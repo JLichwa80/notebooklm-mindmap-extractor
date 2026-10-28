@@ -1,0 +1,38 @@
+<!doctype html>
+<meta charset="utf-8">
+<iframe title="Mind Map" style="width:700px;height:300px"></iframe>
+<mat-card class="to-user-message-card-content">
+  <div class="message-text-content">Old response</div>
+  <button aria-label="Copy model response to clipboard">Copy</button>
+</mat-card>
+<script>
+const frame = document.querySelector('iframe');
+frame.srcdoc = `<svg width="700" height="300" role="tree">
+  <g class="node" role="treeitem" aria-level="1" aria-label="Root, 1 children" transform="translate(10,40)">
+    <rect width="160" height="40" y="-20"></rect>
+    <text class="node-name" style="pointer-events:none">Root</text>
+    <text class="expand-symbol" x="150" style="pointer-events:none">&lt;</text>
+  </g>
+  <g class="node" role="treeitem" aria-level="2" aria-label="Child" transform="translate(230,100)">
+    <rect width="160" height="40" y="-20"></rect>
+    <text class="node-name" style="pointer-events:none">Child</text>
+  </g>
+</svg>
+<script>document.querySelectorAll('g.node').forEach(node => node.addEventListener('click', () => {
+  parent.postMessage({title:node.querySelector('.node-name').textContent}, '*');
+}));<\/script>`;
+window.addEventListener('message', event => {
+  if (event.source !== frame.contentWindow) return;
+  const card = document.createElement('mat-card');
+  card.className = 'to-user-message-card-content';
+  card.innerHTML = '<div class="message-text-content"><thinking-chain-view>Thoughts</thinking-chain-view><p>Partial</p></div>';
+  document.body.append(card);
+  // Text stays unchanged longer than the stability window while still generating.
+  setTimeout(() => {
+    card.querySelector('p').textContent = 'Completed response for ' + event.data.title;
+    const copy = document.createElement('button');
+    copy.setAttribute('aria-label', 'Copy model response to clipboard');
+    card.append(copy);
+  }, 1800);
+});
+</script>
