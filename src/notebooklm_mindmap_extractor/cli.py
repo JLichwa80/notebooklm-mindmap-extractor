@@ -16,7 +16,11 @@ from .builder import (
     generate_outline_yaml,
     slugify,
 )
-from .extractor import extract_mindmap_nodes, find_mindmap_frame, find_notebook_page, open_mindmap, traverse_and_populate
+from .extractor import (
+    RAW_DIR_NAME, clean_run, extract_mindmap_nodes, find_mindmap_frame, find_notebook_page, load_run_tree,
+    open_mindmap,
+    traverse_and_populate,
+)
 from .hierarchy import build_hierarchy
 
 
@@ -117,6 +121,17 @@ def parse_arguments(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         help="Compile full handbook from a relative or absolute run folder using its doc_full_order.yml",
     )
     parser.add_argument(
+        "--clean",
+        dest="clean_folder",
+        type=Path,
+        help="Offline: clean the saved raw .txt files of a run folder (or its tmp folder) into .md files",
+    )
+    parser.add_argument(
+        "--extract-only",
+        action="store_true",
+        help="Only capture raw text into <run>/tmp; run --clean later to produce the .md files",
+    )
+    parser.add_argument(
         "--outline",
         type=Path,
         help="Path to custom doc_full_order.yml file for ordering",
@@ -149,14 +164,17 @@ def parse_arguments(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
             if not args.mindmap_title and len(args.positional) >= 2:
                 args.mindmap_title = args.positional[1]
 
-    if args.build_folder:
-        folder = args.build_folder
+    if args.build_folder or args.clean_folder:
+        folder = args.build_folder or args.clean_folder
         if not folder.is_absolute() and not folder.exists():
             base = args.folder_output or Path("handbook")
             candidate = base / folder
             if candidate.exists():
                 folder = candidate
-        args.build_folder = folder
+        if args.clean_folder:
+            args.clean_folder = folder.parent if folder.name == RAW_DIR_NAME else folder
+        else:
+            args.build_folder = folder
     else:
         if not args.notebook:
             parser.error("The notebook name, URL, or ID is required (e.g. --notebook 'Notebook Name').")
@@ -191,6 +209,15 @@ def get_notebook_name(page, fallback: Optional[str] = None) -> str:
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     args = parse_arguments(argv)
+    if args.clean_folder:
+        try:
+            for root in load_run_tree(args.clean_folder):
+                clean_run(root, args.clean_folder)
+            print(f"[+] Cleaned node files written in: {args.clean_folder}")
+            return 0
+        except (OSError, RuntimeError, ValueError) as exc:
+            print(f"[-] {exc}", file=sys.stderr)
+            return 1
     if args.build_folder:
         try:
             compiled = build_handbook_from_folder(args.build_folder, args.output, args.outline)
@@ -245,15 +272,19 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 output_file.write_text("", encoding="utf-8")
 
             print(f"[*] Creating handbook in: {run_dir}")
-            document = "".join(
+            for root in roots:
                 traverse_and_populate(
-                    page, root, args.wait_timeout, remaining, mindmap, output_file, run_dir, dry_run=args.dry_run
+                    page, root, args.wait_timeout, remaining, mindmap, run_dir / RAW_DIR_NAME, dry_run=args.dry_run
                 )
-                for root in roots
-            )
-
+            print(f"[*] Raw text saved in: {run_dir / RAW_DIR_NAME}")
             outline_path = run_dir / "doc_full_order.yml"
             outline_path.write_text(generate_outline_yaml(roots), encoding="utf-8")
+            if args.extract_only:
+                print(f"[+] Extract only: clean later with --clean \"{run_dir}\"")
+                return 0
+            document = "".join(clean_run(root, run_dir) for root in roots)
+            if output_file:
+                output_file.write_text(document, encoding="utf-8")
 
             print(f"[+] Handbook folder created: {run_dir}")
             print(f"[+] Full order outline saved: {outline_path}")

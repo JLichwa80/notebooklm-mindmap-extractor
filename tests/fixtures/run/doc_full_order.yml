@@ -1,0 +1,163 @@
+# Handbook Compilation Order (doc_full_order.yml)
+# Reorder sections by changing the 'order' integer or moving items.
+
+- nodeTitle: "Domains and Best Tools for Regular Folks"
+  childNodes:
+    - title: "Academic Research & Reference Management"
+      order: 1
+    - title: "Note Synthesis & Knowledge Management"
+      order: 2
+    - title: "Email Triage & Thunderbird Organization"
+      order: 3
+    - title: "Spreadsheet Column Cleaning & Data Wrangling"
+      order: 4
+    - title: "Web Clipping & Bookmark Organization"
+      order: 5
+    - title: "Smart Form Filling & Application Completion"
+      order: 6
+    - title: "Slide Deck & Presentation Generation"
+      order: 7
+    - title: "Smart Home Voice & Device Control"
+      order: 8
+    - title: "Recipe Extraction & Grocery Parsing"
+      order: 9
+    - title: "Continuous Screen Memory & Activity Search"
+      order: 10
+
+- nodeTitle: "Academic Research & Reference Management"
+  childNodes:
+    - title: "Zotero + ZoteroOllama"
+      order: 1
+
+- nodeTitle: "Zotero + ZoteroOllama"
+  childNodes:
+    - title: "Task: Extract methodology and findings from academic PDFs"
+      order: 1
+    - title: "Feature: Chat with PDF directly inside reading pane"
+      order: 2
+    - title: "Storage: Saves answers as child notes attached to source PDF"
+      order: 3
+
+- nodeTitle: "Note Synthesis & Knowledge Management"
+  childNodes:
+    - title: "Obsidian + LLM Wiki / Copilot"
+      order: 1
+
+- nodeTitle: "Obsidian + LLM Wiki / Copilot"
+  childNodes:
+    - title: "Task: Scan private Markdown vault for thematic overlaps"
+      order: 1
+    - title: "Feature: Suggests bi-directional graph backlinks"
+      order: 2
+    - title: "Action: Drafts synthetic index pages and structures rough notes"
+      order: 3
+
+- nodeTitle: "Email Triage & Thunderbird Organization"
+  childNodes:
+    - title: "Thunderbird + ThunderAI"
+      order: 1
+
+- nodeTitle: "Thunderbird + ThunderAI"
+  childNodes:
+    - title: "Auto-Tagging: Assigns color tags like Urgent, Invoice, and Follow-Up"
+      order: 1
+    - title: "Digest Generation: Condenses multi-message reply threads into decision matrices"
+      order: 2
+    - title: "Task Extraction: Pulls meeting details into local calendars"
+      order: 3
+
+- nodeTitle: "Spreadsheet Column Cleaning & Data Wrangling"
+  childNodes:
+    - title: "Excel + Cellm / XLlama"
+      order: 1
+
+- nodeTitle: "Excel + Cellm / XLlama"
+  childNodes:
+    - title: "Task: Bulk data cleaning without writing complex nested formulas"
+      order: 1
+    - title: "Function: Use formulas like =PROMPT to standardize phone numbers or extract state abbreviations"
+      order: 2
+
+- nodeTitle: "Web Clipping & Bookmark Organization"
+  childNodes:
+    - title: "Hoarder"
+      order: 1
+
+- nodeTitle: "Hoarder"
+  childNodes:
+    - title: "Task: Save links, recipes, and articles without manual tagging"
+      order: 1
+    - title: "Feature: Strips ads and navigation noise automatically"
+      order: 2
+    - title: "Action: Prompts Ollama to write summaries and assign topical tags like #finance"
+      order: 3
+
+- nodeTitle: "Smart Form Filling & Application Completion"
+  childNodes:
+    - title: "Fillo AI / Offline Autofill / Fillify"
+      order: 1
+
+- nodeTitle: "Fillo AI / Offline Autofill / Fillify"
+  childNodes:
+    - title: "Task: 1-click completion of web forms and job portals"
+      order: 1
+    - title: "Feature: Maps web page input labels to a private local user profile"
+      order: 2
+    - title: "Action: Synthesizes tailored answers for open-ended survey prompts"
+      order: 3
+
+- nodeTitle: "Slide Deck & Presentation Generation"
+  childNodes:
+    - title: "Presenton"
+      order: 1
+
+- nodeTitle: "Presenton"
+  childNodes:
+    - title: "Task: Turn raw documents or bulleted notes into editable slide decks"
+      order: 1
+    - title: "Feature: Automatically structures content across title, metric callout, and split comparison slides"
+      order: 2
+    - title: "Export: Save outputs to PDF or PowerPoint formats completely offline"
+      order: 3
+
+- nodeTitle: "Smart Home Voice & Device Control"
+  childNodes:
+    - title: "Home Assistant + Ollama"
+      order: 1
+
+- nodeTitle: "Home Assistant + Ollama"
+  childNodes:
+    - title: "Task: Private conversation agent for living spaces"
+      order: 1
+    - title: "Feature: Answers situational inquiries about home status"
+      order: 2
+    - title: "Automation: Triggers complex device actions like dimming lights or adjusting climate targets"
+      order: 3
+
+- nodeTitle: "Recipe Extraction & Grocery Parsing"
+  childNodes:
+    - title: "Mealie"
+      order: 1
+
+- nodeTitle: "Mealie"
+  childNodes:
+    - title: "Task: Extract clean culinary instructions from chaotic web sources"
+      order: 1
+    - title: "Feature: Bypasses author backstories and ad copy"
+      order: 2
+    - title: "Action: Normalizes quantities and categorizes items into grocery aisle departments"
+      order: 3
+
+- nodeTitle: "Continuous Screen Memory & Activity Search"
+  childNodes:
+    - title: "Screenpipe"
+      order: 1
+
+- nodeTitle: "Screenpipe"
+  childNodes:
+    - title: "Task: 24/7 background desktop timeline utility"
+      order: 1
+    - title: "Feature: Silently captures active windows using local OCR and records audio"
+      order: 2
+    - title: "Query: Ask natural language questions about workday activities without cloud tracking"
+      order: 3

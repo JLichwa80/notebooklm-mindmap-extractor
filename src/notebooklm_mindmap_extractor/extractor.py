@@ -8,8 +8,9 @@ from urllib.parse import urlparse
 
 from playwright.sync_api import Frame, Page, TimeoutError as PlaywrightTimeoutError
 
+from .builder import normalize_children_order, parse_outline_yaml
 from .models import MindmapNode
-from .builder import clean_extracted_text, clean_citations
+from .cleaner import clean_extracted_text
 
 
 NODE_SELECTOR = 'svg g[role="treeitem"], svg g.node, svg text, [data-node-id]'
@@ -22,6 +23,9 @@ STREAMING_SELECTOR = (
     '.streaming-indicator, [aria-label*="Generating"], .typing, '
     'button[aria-label="Stop generating"]'
 )
+# Page-side function shared by _response_state and find_card_for_node. The raw capture is the
+# element's visible text exactly as the page renders it; all cleaning happens in cleaner.py.
+CLEAN_NODE_TEXT_JS = r"""const cleanNodeText = el => el.innerText.trim();"""
 
 
 def find_notebook_page(browser_context, notebook_target: Optional[str] = None) -> Page:
@@ -190,39 +194,7 @@ def extract_mindmap_nodes(page, auto_expand: bool = True) -> List[Dict]:
 
 def _response_state(page: Page) -> Dict:
     return page.evaluate("""selectors => {
-        const cleanNodeText = el => {
-            const clone = el.cloneNode(true);
-            clone.querySelectorAll('thinking-chain-view, mat-icon, citation-marker, citation-chip, .citation, button.citation, [aria-label*="citation" i]').forEach(e => e.remove());
-            clone.querySelectorAll('table').forEach(table => {
-                const rows = Array.from(table.querySelectorAll('tr'));
-                if (rows.length === 0) return;
-                const matrix = [];
-                for (const tr of rows) {
-                    const cells = Array.from(tr.querySelectorAll('th, td')).map(td => td.innerText.replace(/[\\r\\n]+/g, ' ').trim());
-                    if (cells.some(c => c)) matrix.push(cells);
-                }
-                if (matrix.length >= 2) {
-                    const maxCols = Math.max(...matrix.map(r => r.length));
-                    const padded = matrix.map(r => r.concat(Array(maxCols - r.length).fill('')));
-                    const lines = [];
-                    lines.push('| ' + padded[0].join(' | ') + ' |');
-                    lines.push('| ' + Array(maxCols).fill('---').join(' | ') + ' |');
-                    for (let r = 1; r < padded.length; r++) {
-                        lines.push('| ' + padded[r].join(' | ') + ' |');
-                    }
-                    const placeholder = document.createElement('div');
-                    placeholder.textContent = '\\n\\n' + lines.join('\\n') + '\\n\\n';
-                    table.replaceWith(placeholder);
-                }
-            });
-            clone.querySelectorAll('li').forEach(li => {
-                const t = li.innerText.trim();
-                if (t && !t.startsWith('* ') && !t.startsWith('- ')) {
-                    li.innerText = '* ' + t;
-                }
-            });
-            return clone.innerText.trim();
-        };
+        """ + CLEAN_NODE_TEXT_JS + """
 
         const responses = Array.from(document.querySelectorAll(selectors.response))
             .filter(el => el.getBoundingClientRect().width > 0);
@@ -268,39 +240,7 @@ def find_card_for_node(page: Page, title: str) -> Optional[str]:
     """Find the completed response card specifically generated for this node title."""
     clean_title = " ".join(title.split())
     card_text = page.evaluate("""title => {
-        const cleanNodeText = el => {
-            const clone = el.cloneNode(true);
-            clone.querySelectorAll('thinking-chain-view, mat-icon, citation-marker, citation-chip, .citation, button.citation, [aria-label*="citation" i]').forEach(e => e.remove());
-            clone.querySelectorAll('table').forEach(table => {
-                const rows = Array.from(table.querySelectorAll('tr'));
-                if (rows.length === 0) return;
-                const matrix = [];
-                for (const tr of rows) {
-                    const cells = Array.from(tr.querySelectorAll('th, td')).map(td => td.innerText.replace(/[\\r\\n]+/g, ' ').trim());
-                    if (cells.some(c => c)) matrix.push(cells);
-                }
-                if (matrix.length >= 2) {
-                    const maxCols = Math.max(...matrix.map(r => r.length));
-                    const padded = matrix.map(r => r.concat(Array(maxCols - r.length).fill('')));
-                    const lines = [];
-                    lines.push('| ' + padded[0].join(' | ') + ' |');
-                    lines.push('| ' + Array(maxCols).fill('---').join(' | ') + ' |');
-                    for (let r = 1; r < padded.length; r++) {
-                        lines.push('| ' + padded[r].join(' | ') + ' |');
-                    }
-                    const placeholder = document.createElement('div');
-                    placeholder.textContent = '\\n\\n' + lines.join('\\n') + '\\n\\n';
-                    table.replaceWith(placeholder);
-                }
-            });
-            clone.querySelectorAll('li').forEach(li => {
-                const t = li.innerText.trim();
-                if (t && !t.startsWith('* ') && !t.startsWith('- ')) {
-                    li.innerText = '* ' + t;
-                }
-            });
-            return clone.innerText.trim();
-        };
+        """ + CLEAN_NODE_TEXT_JS + """
 
         const norm = s => (s || '').replace(/\\s+/g, ' ').trim().toLowerCase();
         const target = norm(title);
@@ -318,7 +258,7 @@ def find_card_for_node(page: Page, title: str) -> Optional[str]:
         }
         return null;
     }""", clean_title)
-    return clean_extracted_text(card_text) if card_text else None
+    return card_text or None
 
 
 def click_and_capture_response(page: Page, node: MindmapNode, timeout_sec: int, mindmap=None) -> str:
@@ -342,7 +282,7 @@ def click_and_capture_response(page: Page, node: MindmapNode, timeout_sec: int, 
                 previous = text
                 stable_since = time.monotonic()
             if fresh and text and not state["streaming"] and time.monotonic() - stable_since >= 1.0:
-                return clean_extracted_text(text)
+                return text
         else:
             if time.monotonic() - (deadline - timeout_sec) >= 3.0:
                 existing = find_card_for_node(page, node.title)
@@ -382,55 +322,80 @@ def sanitize_filename(name: str) -> str:
     return cleaned[:80] or "untitled"
 
 
+RAW_DIR_NAME = "tmp"
+
+
+def node_paths(node: MindmapNode, folder: Path, suffix: str):
+    """Where a node's file lives under folder (Overview for the root and parents), and its children's folder."""
+    safe_title = sanitize_filename(" ".join(node.title.splitlines()))
+    if node.level == 1:
+        return folder / f"Overview{suffix}", folder
+    if node.children:
+        return folder / safe_title / f"Overview{suffix}", folder / safe_title
+    return folder / f"{safe_title}{suffix}", folder
+
+
 def traverse_and_populate(
     page: Page, node: MindmapNode, timeout_sec: int, remaining: Optional[List[int]] = None,
-    mindmap=None, output_path: Optional[object] = None, folder_dir: Optional[object] = None,
-    dry_run: bool = False,
-) -> str:
-    """Compile in preorder, optionally limiting the number of generated responses."""
+    mindmap=None, raw_dir: Optional[Path] = None, dry_run: bool = False,
+) -> None:
+    """Step 1: capture each node's raw text in preorder and save it uncleaned, mirroring the .md layout."""
     if remaining is not None:
         if remaining[0] <= 0:
-            return ""
+            return
         remaining[0] -= 1
 
     if dry_run:
         print(f"[*] Processing [Level {node.level}] (structure): {node.title}")
-        existing_card = find_card_for_node(page, node.title)
-        node.content = existing_card if existing_card else ""
+        raw_text = find_card_for_node(page, node.title) or ""
     else:
-        node.content = click_and_capture_response(page, node, timeout_sec, mindmap)
+        raw_text = click_and_capture_response(page, node, timeout_sec, mindmap)
+
+    raw_file, child_dir = node_paths(node, raw_dir, ".txt")
+    raw_file.parent.mkdir(parents=True, exist_ok=True)
+    raw_file.write_text(raw_text, encoding="utf-8", newline="")
+    node.raw_file = str(raw_file)
+
+    for child in node.children:
+        traverse_and_populate(page, child, timeout_sec, remaining, mindmap, child_dir, dry_run)
+    if node.children and mindmap and node.level > 1:
+        toggle_node(mindmap, node, expand=False)
+
+
+def clean_run(node: MindmapNode, folder_path: Path) -> str:
+    """Step 2: clean each saved raw file and write the node .md files. Returns the compiled sections."""
+    if not node.raw_file:
+        return ""
+    node.content = clean_extracted_text(Path(node.raw_file).read_text(encoding="utf-8", newline=""))
 
     title = " ".join(node.title.splitlines())
     heading = "#" * min(node.level, 6)
     body = f"\n\n{node.content}\n" if node.content else "\n"
     section = f"\n{heading} {title}{body}"
-    if output_path:
-        with open(output_path, "a", encoding="utf-8") as f:
-            f.write(section)
 
-    child_dir = folder_dir
-    if folder_dir:
-        folder_path = folder_dir if isinstance(folder_dir, Path) else Path(folder_dir)
-        safe_title = sanitize_filename(title)
-        doc_content = f"# {title}\n\n{node.content}\n" if node.content else f"# {title}\n"
-        if node.level == 1:
-            (folder_path / "Overview.md").write_text(doc_content, encoding="utf-8")
-            child_dir = folder_path
-        elif node.children:
-            child_dir = folder_path / safe_title
-            child_dir.mkdir(parents=True, exist_ok=True)
-            (child_dir / "Overview.md").write_text(doc_content, encoding="utf-8")
-        else:
-            folder_path.mkdir(parents=True, exist_ok=True)
-            (folder_path / f"{safe_title}.md").write_text(doc_content, encoding="utf-8")
+    node_file, child_dir = node_paths(node, folder_path, ".md")
+    node_file.parent.mkdir(parents=True, exist_ok=True)
+    node_file.write_text(f"# {title}\n\n{node.content}\n" if node.content else f"# {title}\n", encoding="utf-8")
 
-    if node.children:
-        children_output = "".join(
-            traverse_and_populate(page, child, timeout_sec, remaining, mindmap, output_path, child_dir, dry_run)
-            for child in node.children
-        )
-        if mindmap and node.level > 1:
-            toggle_node(mindmap, node, expand=False)
-        return section + children_output
+    return section + "".join(clean_run(child, child_dir) for child in node.children)
 
-    return section
+
+def load_run_tree(run_dir: Path) -> List[MindmapNode]:
+    """Rebuild the node tree of a saved run from doc_full_order.yml and the raw files in <run_dir>/tmp."""
+    entries = parse_outline_yaml((run_dir / "doc_full_order.yml").read_text(encoding="utf-8"))
+    children_of = {item["nodeTitle"]: normalize_children_order(item.get("childNodes")) for item in entries}
+    raw_dir = run_dir / RAW_DIR_NAME
+
+    def build(title: str, level: int, folder: Path) -> MindmapNode:
+        node = MindmapNode("", title, level, 0, 0)
+        node.children = [MindmapNode("", child, level + 1, 0, 0) for child in children_of.get(title, [])]
+        raw_file, child_dir = node_paths(node, folder, ".txt")
+        node.raw_file = str(raw_file) if raw_file.exists() else ""  # absent when the run was limited by --max-nodes
+        node.children = [build(child.title, level + 1, child_dir) for child in node.children]
+        return node
+
+    child_titles = {child for kids in children_of.values() for child in kids}
+    roots = [build(title, 1, raw_dir) for title in children_of if title not in child_titles]
+    if not list(raw_dir.rglob("*.txt")):
+        raise RuntimeError(f"No raw files found in {raw_dir}")
+    return roots

@@ -12,5 +12,6 @@ class MindmapNode:
     x: float
     y: float
     content: str = ""
+    raw_file: str = ""
     children: List["MindmapNode"] = field(default_factory=list)
     aria_label: str = ""
