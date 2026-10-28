@@ -70,11 +70,32 @@ Both `notebook.google.com` and `notebooklm.google.com` notebook links, IDs, and 
 | `--mindmap-title` | (Required for extraction) | Click the exact visible map title |
 | `--output` | `None` (compiled via `--build`) | UTF-8 Markdown destination |
 | `--folder-output` | `handbook` | Save docs in versioned node folder hierarchy |
+| `--extract-only` | `False` | Only capture raw text into `<run>/tmp`; clean later with `--clean` |
+| `--clean` | `None` | Offline: clean the saved raw `.txt` files of a run folder (or its `tmp` folder) into `.md` files |
 | `--build` | `None` | Recompile document from run folder offline (supports relative path) |
 | `--outline` | `doc_full_order.yml` in run dir | Custom order YAML for document compilation |
 | `--wait-timeout` | `120` | Maximum response wait in seconds per node |
 | `--max-nodes` | All discovered nodes | Limit generation for smoke testing |
 | `--dry-run` | `False` | Fast structure test without waiting for chat generations |
+
+## Two steps: capture, then clean
+
+Extraction runs in two steps so you never have to re-extract to adjust the output.
+
+1. **Capture** saves each node's text exactly as the page shows it, with no processing, to `<run>/tmp/`. The `.txt` files mirror the folder layout of the final `.md` files (`Overview.txt` for the root and for nodes with children, `<title>.txt` for leaves).
+2. **Clean** (`cleaner.py`) reads those files and writes the `.md` files next to `tmp/`. It removes citations, page icons and the follow-up prompt, turns tables into Markdown tables, fences box diagrams, and separates paragraphs.
+
+A normal run does both. To do them separately:
+
+```powershell
+# capture only
+notebooklm-mindmap-extractor --notebook "My Notebook" --mindmap-title "My Map" --extract-only
+
+# clean from the saved raw files, as often as needed, with no browser
+notebooklm-mindmap-extractor --clean handbook/my-notebook/my-map-20261028_152843
+```
+
+The page text carries no markup, so bold, bullets and heading markers are not available; headings and list items arrive as plain paragraphs. `--build` only combines the cleaned `.md` files into one document and does no cleaning.
 
 ## Recompiling from Nodes and Customizing with doc_full_order.yml
 
@@ -122,9 +143,9 @@ python -m build
 python -m twine check dist/*
 ```
 
-Tests cover hierarchy reconstruction, CLI validation, notebook targeting, and local Chromium DOM extraction with simulated streaming responses. They do not contact Google. Use `python -m pytest -m "not browser"` for unit tests alone. Browser tests require the Chromium installation above; CDP extraction uses your running Chrome and does not need that download.
+Tests cover hierarchy reconstruction, the cleaner, and the capture-then-clean pipeline on a saved real extraction (`tests/fixtures/run/`). They do not contact Google or need a browser.
 
-`python -m build` creates a source archive and wheel in `dist/`. Packaging follows the [Python Packaging User Guide](https://packaging.python.org/en/latest/tutorials/packaging-projects/). The package is MIT licensed (see `LICENSE`). Releases are published to PyPI by `.github/workflows/publish.yml` when a GitHub Release is published, using Trusted Publishing; run the workflow manually for a TestPyPI dry run.
+`python -m build` creates a source archive and wheel in `dist/`. Packaging follows the [Python Packaging User Guide](https://packaging.python.org/en/latest/tutorials/packaging-projects/). The package is MIT licensed (see `LICENSE`). Releases are published to PyPI by `.github/workflows/publish.yml` when a GitHub Release is published, using Trusted Publishing.
 
 ## Project layout
 
@@ -134,10 +155,12 @@ src/notebooklm_mindmap_extractor/
     __init__.py                     Public data model and hierarchy helper
     __main__.py                     python -m entry point
     cli.py                          Arguments and extraction orchestration
-    extractor.py                    DOM extraction and response capture
+    extractor.py                    Raw capture to tmp/, then the clean step per node
+    cleaner.py                      Cleaning of the raw page text
+    builder.py                      doc_full_order.yml and combining the .md files
     hierarchy.py                    Parent-child reconstruction
     models.py                       MindmapNode dataclass
-tests/                              Unit tests and local browser fixture
+tests/                              Unit tests and a saved real extraction (fixtures/run)
 ```
 
 The former root script is replaced by the installed console and module commands. `requirements.txt` remains an editable-install shortcut.

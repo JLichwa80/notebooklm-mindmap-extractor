@@ -12,11 +12,10 @@ All node content generation must happen through NotebookLM
 
 This repository is a small Python CLI for compiling NotebookLM mindmaps into Markdown.
 
-- `notebooklm_mindmap_extractor.py` contains argument parsing, Playwright CDP connection, DOM extraction, hierarchy reconstruction, response capture, and Markdown output.
-- `requirements.txt` declares the Playwright dependency.
+- `src/notebooklm_mindmap_extractor/` holds the package: `cli.py` (arguments, orchestration), `extractor.py` (Playwright CDP connection, raw capture to `<run>/tmp/*.txt`, and the clean step that writes `.md` files), `cleaner.py` (all text cleaning), `builder.py` (`doc_full_order.yml` and combining the `.md` files), `hierarchy.py`, and `models.py`.
+- Capture saves the page text unprocessed. All cleaning lives in `cleaner.py`; the builder only combines files.
+- `tests/` holds unit tests and `fixtures/run/`, a saved real extraction used to test cleaning without re-extracting.
 - `README.md` documents setup, browser preparation, and CLI usage.
-
-There are no separate source, test, or asset directories. Keep changes focused on the existing script unless a larger structure is justified.
 
 ## Build, Test, and Development Commands
 
